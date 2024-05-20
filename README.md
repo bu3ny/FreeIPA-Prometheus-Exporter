@@ -108,6 +108,7 @@ Modify the following variables in the script with your FreeIPA and LDAP server d
 
 
     - You can verify the metrics exposure by accessing http://localhost:8000 in your web browser or using curl:
+    
       ~~~
       curl http://localhost:8000
       ~~~
