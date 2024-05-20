@@ -98,20 +98,20 @@ Modify the following variables in the script with your FreeIPA and LDAP server d
 
 2. Run the Script:
 
-    ~~~
-    python3 freeipa_exporter.py
-    ~~~
+  ~~~
+  python3 freeipa_exporter.py
+  ~~~
 
 
-  1. This will start the Prometheus exporter on port 8000.
-  2. Verify Metrics Exposure:
+    1. This will start the Prometheus exporter on port 8000.
+    2. Verify Metrics Exposure:
 
 
-    - You can verify the metrics exposure by accessing http://localhost:8000 in your web browser or using curl:
-    
-      ~~~
-      curl http://localhost:8000
-      ~~~
+      - You can verify the metrics exposure by accessing http://localhost:8000 in your web browser or using curl:
+
+        ~~~
+        curl http://localhost:8000
+        ~~~
 
 3. Configure Prometheus to Scrape Metrics:
 
