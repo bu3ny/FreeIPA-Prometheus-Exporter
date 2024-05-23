@@ -1,29 +1,34 @@
-# Created by Moustafa Harbi - mharbi@redhat.com
-# GPLv3
 import os
 import time
 import subprocess
-import requests
+from flask import Flask
 from prometheus_client import start_http_server, Gauge
 from ipalib import api, errors
-from ldap3 import Server, Connection, ALL, SUBTREE
+from ldap3 import Server, ServerPool, Connection, ALL, SUBTREE, Tls
+from concurrent.futures import ThreadPoolExecutor
 import glob
 import signal
 import sys
+import ssl
 
 # FreeIPA connection parameters
 FREEIPA_SERVER = 'idm-1.linux.example.com'
-FREEIPA_USERNAME = 'admin'  # Replace with your FreeIPA username
-FREEIPA_PASSWORD = 'P@ssw0rd'  # Replace with your FreeIPA password
+FREEIPA_USERNAME = 'admin'
+FREEIPA_PASSWORD = 'P@ssw0rd'
 
 # LDAP connection parameters
-LDAP_SERVER = 'ldaps://idm-1.linux.example.com'
+LDAP_SERVER_POOL = [
+    'ldaps://idm-1.linux.example.com'
+# You can define a list here - but since we'll be running the exporter on each IPA server, let's keep it simple.
+#    'ldaps://idm-2.linux.example.com',
+#    'ldaps://idm-2.linux.example.com'
+]
 LDAP_USER = 'cn=Directory Manager'
-LDAP_PASSWORD = 'P@ssw0rd'  # Replace with your LDAP password
+LDAP_PASSWORD = 'P@ssw0rd'
 LDAP_BASE_DN = 'dc=linux,dc=example,dc=com'
 LDAP_MONITOR_DN = 'cn=monitor'
 
-# Interval for running logconv.pl - Every 1 hour is more convenient since the log parsing consumes plenty of resources.
+# Interval for running logconv.pl - Every 1 hour
 LOGCONV_INTERVAL = 3600  # 60 minutes in seconds
 
 # Define Prometheus metrics
@@ -85,7 +90,6 @@ logconv_avg_wtime = Gauge('logconv_avg_wtime', 'Average wait time')
 logconv_avg_optime = Gauge('logconv_avg_optime', 'Average operation time')
 logconv_avg_etime = Gauge('logconv_avg_etime', 'Average elapsed time')
 
-
 # FreeIPA service units (updated to match `ipactl status` output)
 FREEIPA_SERVICES = {
     'Directory Service': 'dirsrv@*.service',
@@ -104,9 +108,10 @@ FREEIPA_SERVICES = {
 # Session storage
 session = None
 
+app = Flask(__name__)
+
 def ipa_login():
     """Log in to FreeIPA using Kerberos."""
-    # Obtain Kerberos ticket using kinit
     kinit_command = f"echo {FREEIPA_PASSWORD} | kinit {FREEIPA_USERNAME}"
     os.system(kinit_command)
 
@@ -117,28 +122,26 @@ def ipa_login():
 def get_ldap_stats():
     """Fetch LDAP statistics and update Prometheus metrics."""
     try:
-        server = Server(LDAP_SERVER, get_info=ALL)
-        conn = Connection(server, user=LDAP_USER, password=LDAP_PASSWORD, auto_bind=True)
+        tls = Tls(validate=ssl.CERT_NONE)
+        servers = [Server(server, use_ssl=True, tls=tls, get_info=ALL) for server in LDAP_SERVER_POOL]
+        server_pool = ServerPool(servers, active=True, exhaust=True)
+        conn = Connection(server_pool, user=LDAP_USER, password=LDAP_PASSWORD, auto_bind=True, receive_timeout=10, read_only=True)
 
-        # Total LDAP entries
-        conn.search(LDAP_BASE_DN, '(objectClass=*)', search_scope=SUBTREE, attributes=['*'])
+        conn.search(LDAP_BASE_DN, '(objectClass=*)', search_scope=SUBTREE, attributes=['*'], paged_size=1000)
         entries = len(conn.entries)
         ldap_entries_count.set(entries)
         print(f"Total LDAP entries: {entries}")
 
-        # Total LDAP users
-        conn.search(LDAP_BASE_DN, '(objectClass=posixAccount)', search_scope=SUBTREE, attributes=['*'])
+        conn.search(LDAP_BASE_DN, '(objectClass=posixAccount)', search_scope=SUBTREE, attributes=['*'], paged_size=1000)
         users = len(conn.entries)
         ldap_users_count.set(users)
         print(f"Total LDAP users: {users}")
 
-        # Total LDAP groups
-        conn.search(LDAP_BASE_DN, '(objectClass=posixGroup)', search_scope=SUBTREE, attributes=['*'])
+        conn.search(LDAP_BASE_DN, '(objectClass=posixGroup)', search_scope=SUBTREE, attributes=['*'], paged_size=1000)
         groups = len(conn.entries)
         ldap_groups_count.set(groups)
         print(f"Total LDAP groups: {groups}")
 
-        # Monitor LDAP statistics
         conn.search(LDAP_MONITOR_DN, '(objectClass=*)', search_scope=SUBTREE, attributes=['*'])
         for entry in conn.entries:
             attributes = entry.entry_attributes_as_dict
@@ -295,7 +298,7 @@ def get_logconv_metrics():
 
         log_files_str = ' '.join(log_files)
 
-        result = subprocess.run(['logconv.pl'] + log_files, capture_output=True, text=True)
+        result = subprocess.run(['logconv.pl'] + log_files, capture_output=True, text=True, timeout=300)
         output = result.stdout
 
         print("logconv.pl output:\n", output)
@@ -344,6 +347,8 @@ def get_logconv_metrics():
                 logconv_avg_etime.set(float(line.split(':')[1].strip()))
 
         print("logconv.pl metrics updated")
+    except subprocess.TimeoutExpired:
+        print("logconv.pl script timed out")
     except Exception as e:
         print(f"An error occurred while fetching logconv.pl metrics: {e}")
 
@@ -408,12 +413,13 @@ if __name__ == '__main__':
 
     last_logconv_run = 0
 
-    while True:
-        get_ipa_metrics()
+    with ThreadPoolExecutor() as executor:
+        while True:
+            executor.submit(get_ipa_metrics)
 
-        current_time = time.time()
-        if current_time - last_logconv_run >= LOGCONV_INTERVAL:
-            get_logconv_metrics()
-            last_logconv_run = current_time
+            current_time = time.time()
+            if current_time - last_logconv_run >= LOGCONV_INTERVAL:
+                executor.submit(get_logconv_metrics)
+                last_logconv_run = current_time
 
-        time.sleep(60)
+            time.sleep(60)
