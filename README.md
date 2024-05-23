@@ -511,7 +511,7 @@ Modify the following variables in the script with your FreeIPA and LDAP server d
 - You can install these packages using pip. Here is the command to install all the required packages:
 
   ~~~
-  pip3 install prometheus_client ldap3 requests ipalib
+  pip3 install prometheus_client ldap3 requests ipalib flask
   ~~~
 
 
