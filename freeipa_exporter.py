@@ -1,15 +1,14 @@
 import os
 import time
 import subprocess
-from flask import Flask
-from prometheus_client import start_http_server, Gauge
+import logging
+from flask import Flask, Response
+from prometheus_client import start_http_server, Gauge, generate_latest
 from ipalib import api, errors
-from ldap3 import Server, ServerPool, Connection, ALL, SUBTREE, Tls
-from concurrent.futures import ThreadPoolExecutor
+from ldap3 import Server, Connection, ALL, SUBTREE
 import glob
 import signal
 import sys
-import ssl
 
 # FreeIPA connection parameters
 FREEIPA_SERVER = 'idm-1.linux.example.com'
@@ -17,18 +16,13 @@ FREEIPA_USERNAME = 'admin'
 FREEIPA_PASSWORD = 'P@ssw0rd'
 
 # LDAP connection parameters
-LDAP_SERVER_POOL = [
-    'ldaps://idm-1.linux.example.com'
-# You can define a list here - but since we'll be running the exporter on each IPA server, let's keep it simple.
-#    'ldaps://idm-2.linux.example.com',
-#    'ldaps://idm-2.linux.example.com'
-]
+LDAP_SERVER = 'ldaps://idm-1.linux.example.com'
 LDAP_USER = 'cn=Directory Manager'
 LDAP_PASSWORD = 'P@ssw0rd'
 LDAP_BASE_DN = 'dc=linux,dc=example,dc=com'
 LDAP_MONITOR_DN = 'cn=monitor'
 
-# Interval for running logconv.pl - Every 1 hour
+# Interval for running logconv.pl - Every 1 hour is more convenient since the log parsing consumes plenty of resources.
 LOGCONV_INTERVAL = 3600  # 60 minutes in seconds
 
 # Define Prometheus metrics
@@ -43,6 +37,7 @@ ipa_certificates_count = Gauge('freeipa_certificates_total', 'Total number of ce
 ipa_certificates_expiring_soon = Gauge('freeipa_certificates_expiring_soon', 'Number of certificates expiring soon')
 ipa_replication_latency = Gauge('freeipa_replication_latency', 'Replication latency between FreeIPA servers')
 ipa_service_uptime = Gauge('freeipa_service_uptime', 'Uptime of FreeIPA services', ['service'])
+ipa_service_status = Gauge('freeipa_service_status', 'Status of FreeIPA services (1 = running, 0 = not running)', ['service'])
 ipa_active_user_accounts = Gauge('freeipa_active_user_accounts', 'Number of active user accounts')
 ipa_inactive_user_accounts = Gauge('freeipa_inactive_user_accounts', 'Number of inactive user accounts')
 ipa_locked_user_accounts = Gauge('freeipa_locked_user_accounts', 'Number of locked user accounts')
@@ -92,13 +87,12 @@ logconv_avg_etime = Gauge('logconv_avg_etime', 'Average elapsed time')
 
 # FreeIPA service units (updated to match `ipactl status` output)
 FREEIPA_SERVICES = {
-    'Directory Service': 'dirsrv@*.service',
     'krb5kdc Service': 'krb5kdc.service',
     'kadmin Service': 'kadmin.service',
     'named Service': 'named.service',
     'httpd Service': 'httpd.service',
     'ipa-custodia Service': 'ipa-custodia.service',
-    'pki-tomcatd Service': 'pki-tomcatd.target',
+    'pki-tomcatd Service': 'pki-tomcatd@pki-tomcat.service',
     'smb Service': 'smb.service',
     'winbind Service': 'winbind.service',
     'ipa-otpd Service': 'ipa-otpd.socket',
@@ -108,10 +102,12 @@ FREEIPA_SERVICES = {
 # Session storage
 session = None
 
-app = Flask(__name__)
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def ipa_login():
     """Log in to FreeIPA using Kerberos."""
+    # Obtain Kerberos ticket using kinit
     kinit_command = f"echo {FREEIPA_PASSWORD} | kinit {FREEIPA_USERNAME}"
     os.system(kinit_command)
 
@@ -119,29 +115,42 @@ def ipa_login():
     api.finalize()
     api.Backend.rpcclient.connect()
 
+
+
+def timeout_handler(signum, frame):
+    """Handler for the timeout signal."""
+    raise TimeoutError("LDAP operation timed out")
+
 def get_ldap_stats():
     """Fetch LDAP statistics and update Prometheus metrics."""
     try:
-        tls = Tls(validate=ssl.CERT_NONE)
-        servers = [Server(server, use_ssl=True, tls=tls, get_info=ALL) for server in LDAP_SERVER_POOL]
-        server_pool = ServerPool(servers, active=True, exhaust=True)
-        conn = Connection(server_pool, user=LDAP_USER, password=LDAP_PASSWORD, auto_bind=True, receive_timeout=10, read_only=True)
+        server = Server(LDAP_SERVER, get_info=ALL, use_ssl=True)
+        conn = Connection(server, user=LDAP_USER, password=LDAP_PASSWORD, auto_bind=True)
 
+        # Set up a signal handler for timeout
+        signal.signal(signal.SIGALRM, timeout_handler)
+        # Set a timeout value (in seconds) for the LDAP operation
+        signal.alarm(10)  # Adjust the timeout value as needed
+
+        # Total LDAP entries
         conn.search(LDAP_BASE_DN, '(objectClass=*)', search_scope=SUBTREE, attributes=['*'], paged_size=1000)
         entries = len(conn.entries)
         ldap_entries_count.set(entries)
-        print(f"Total LDAP entries: {entries}")
+        logging.info(f"Total LDAP entries: {entries}")
 
+        # Total LDAP users
         conn.search(LDAP_BASE_DN, '(objectClass=posixAccount)', search_scope=SUBTREE, attributes=['*'], paged_size=1000)
         users = len(conn.entries)
         ldap_users_count.set(users)
-        print(f"Total LDAP users: {users}")
+        logging.info(f"Total LDAP users: {users}")
 
+        # Total LDAP groups
         conn.search(LDAP_BASE_DN, '(objectClass=posixGroup)', search_scope=SUBTREE, attributes=['*'], paged_size=1000)
         groups = len(conn.entries)
         ldap_groups_count.set(groups)
-        print(f"Total LDAP groups: {groups}")
+        logging.info(f"Total LDAP groups: {groups}")
 
+        # Monitor LDAP statistics
         conn.search(LDAP_MONITOR_DN, '(objectClass=*)', search_scope=SUBTREE, attributes=['*'])
         for entry in conn.entries:
             attributes = entry.entry_attributes_as_dict
@@ -168,8 +177,16 @@ def get_ldap_stats():
             if 'searchops' in attributes:
                 ldap_search_ops.set(float(attributes['searchops'][0]))
 
+        # Reset the alarm after successful LDAP operations
+        signal.alarm(0)
+
+    except TimeoutError:
+        logging.error("LDAP operation timed out")
     except Exception as e:
-        print(f"An error occurred while fetching LDAP stats: {e}")
+        logging.error(f"An error occurred while fetching LDAP stats: {e}")
+
+
+
 
 def check_service_status():
     """Check the status of FreeIPA services."""
@@ -178,7 +195,7 @@ def check_service_status():
         status_dict = {line.split(': ')[0]: line.split(': ')[1] for line in status_output if ': ' in line}
         return status_dict
     except Exception as e:
-        print(f"An error occurred while checking FreeIPA service status: {e}")
+        logging.error(f"An error occurred while checking FreeIPA service status: {e}")
         return {}
 
 def get_freeipa_service_status():
@@ -188,9 +205,10 @@ def get_freeipa_service_status():
         for service, systemd_service in FREEIPA_SERVICES.items():
             status = 1 if status_dict.get(service) == 'RUNNING' else 0
             ipa_service_uptime.labels(service=systemd_service).set(status)
-            print(f"{service} ({systemd_service}) status: {'RUNNING' if status == 1 else 'NOT RUNNING'}")
+            ipa_service_status.labels(service=systemd_service).set(status)
+            logging.info(f"{service} ({systemd_service}) status: {'RUNNING' if status == 1 else 'NOT RUNNING'}")
     except Exception as e:
-        print(f"An error occurred while fetching FreeIPA service status: {e}")
+        logging.error(f"An error occurred while fetching FreeIPA service status: {e}")
 
 def get_certificates_expiring_soon():
     """Fetch certificates expiring soon and update Prometheus metrics."""
@@ -203,9 +221,9 @@ def get_certificates_expiring_soon():
                 if is_certificate_expiring_soon(expiration_date):
                     expiring_soon += 1
         ipa_certificates_expiring_soon.set(expiring_soon)
-        print(f"Certificates expiring soon: {expiring_soon}")
+        logging.info(f"Certificates expiring soon: {expiring_soon}")
     except errors.PublicError as e:
-        print(f"An error occurred while fetching certificates expiring soon: {e}")
+        logging.error(f"An error occurred while fetching certificates expiring soon: {e}")
 
 def is_certificate_expiring_soon(expiration_date):
     """Check if a certificate is expiring soon (within 30 days)."""
@@ -217,15 +235,15 @@ def get_replication_latency():
     try:
         latency = 0.5
         ipa_replication_latency.set(latency)
-        print(f"Replication latency: {latency}")
+        logging.info(f"Replication latency: {latency}")
     except errors.PublicError as e:
-        print(f"An error occurred while fetching replication latency: {e}")
+        logging.error(f"An error occurred while fetching replication latency: {e}")
 
 def get_service_uptime():
     """Fetch the uptime of FreeIPA services and update Prometheus metrics."""
     try:
-        for service in FREEIPA_SERVICES.values():
-            service_units = subprocess.check_output(['systemctl', 'list-units', service], text=True).splitlines()
+        for service, systemd_service in FREEIPA_SERVICES.items():
+            service_units = subprocess.check_output(['systemctl', 'list-units', systemd_service], text=True).splitlines()
             for service_unit in service_units:
                 if 'service' in service_unit or 'socket' in service_unit:
                     service_unit_name = service_unit.split()[0]
@@ -234,11 +252,11 @@ def get_service_uptime():
                     if uptime_str:
                         uptime = time.time() - time.mktime(time.strptime(uptime_str, '%a %Y-%m-%d %H:%M:%S %Z'))
                         ipa_service_uptime.labels(service=service_unit_name).set(uptime)
-                        print(f"{service_unit_name} uptime: {uptime}")
+                        logging.info(f"{service_unit_name} uptime: {uptime}")
                     else:
-                        print(f"No uptime information available for {service_unit_name}. Full output: {result.stdout}")
+                        logging.info(f"No uptime information available for {service_unit_name}. Full output: {result.stdout}")
     except Exception as e:
-        print(f"An error occurred while fetching service uptime: {e}")
+        logging.error(f"An error occurred while fetching service uptime: {e}")
 
 def get_user_account_states():
     """Fetch user account states and update Prometheus metrics."""
@@ -252,11 +270,11 @@ def get_user_account_states():
         ipa_locked_user_accounts.set(locked_users)
         ipa_inactive_user_accounts.set(inactive_users)
 
-        print(f"Active users: {active_users}")
-        print(f"Locked users: {locked_users}")
-        print(f"Inactive users: {inactive_users}")
+        logging.info(f"Active users: {active_users}")
+        logging.info(f"Locked users: {locked_users}")
+        logging.info(f"Inactive users: {inactive_users}")
     except errors.PublicError as e:
-        print(f"An error occurred while fetching user account states: {e}")
+        logging.error(f"An error occurred while fetching user account states: {e}")
 
 def get_password_expirations():
     """Fetch users with expiring passwords and update Prometheus metrics."""
@@ -264,9 +282,9 @@ def get_password_expirations():
         users = api.Command.user_find()['result']
         expiring_soon = sum(1 for user in users if 'krbpasswordexpiration' in user and is_password_expiring_soon(user['krbpasswordexpiration']))
         ipa_password_expirations.set(expiring_soon)
-        print(f"Users with expiring passwords: {expiring_soon}")
+        logging.info(f"Users with expiring passwords: {expiring_soon}")
     except errors.PublicError as e:
-        print(f"An error occurred while fetching password expirations: {e}")
+        logging.error(f"An error occurred while fetching password expirations: {e}")
 
 def is_password_expiring_soon(expiration_date):
     """Check if a password is expiring soon (within 30 days)."""
@@ -281,19 +299,19 @@ def get_group_memberships():
             group_name = group['cn'][0]
             members = api.Command.group_show(group_name)['result'].get('member_user', [])
             ipa_group_memberships.labels(group=group_name).set(len(members))
-            print(f"Group {group_name} has {len(members)} members")
+            logging.info(f"Group {group_name} has {len(members)} members")
     except errors.PublicError as e:
-        print(f"An error occurred while fetching group memberships: {e}")
+        logging.error(f"An error occurred while fetching group memberships: {e}")
 
 def get_logconv_metrics():
     """Run logconv.pl script, parse output, and update Prometheus metrics."""
     try:
-        print("Running logconv.pl script...")
+        logging.info("Running logconv.pl script...")
 
         log_files = glob.glob('/var/log/dirsrv/slapd-*/access*')
 
         if not log_files:
-            print("No log files found for logconv.pl")
+            logging.info("No log files found for logconv.pl")
             return
 
         log_files_str = ' '.join(log_files)
@@ -301,7 +319,7 @@ def get_logconv_metrics():
         result = subprocess.run(['logconv.pl'] + log_files, capture_output=True, text=True, timeout=300)
         output = result.stdout
 
-        print("logconv.pl output:\n", output)
+        logging.info("logconv.pl output:\n%s", output)
 
         for line in output.splitlines():
             if "Peak Concurrent Connections" in line:
@@ -346,46 +364,48 @@ def get_logconv_metrics():
             elif "Average etime (elapsed time)" in line:
                 logconv_avg_etime.set(float(line.split(':')[1].strip()))
 
-        print("logconv.pl metrics updated")
-    except subprocess.TimeoutExpired:
-        print("logconv.pl script timed out")
+        logging.info("logconv.pl metrics updated")
     except Exception as e:
-        print(f"An error occurred while fetching logconv.pl metrics: {e}")
+        logging.error(f"An error occurred while fetching logconv.pl metrics: {e}")
+
+def discover_directory_services():
+    """Discover all running Directory Services."""
+    try:
+        service_units = subprocess.check_output(['systemctl', 'list-units', '--type=service', '--state=running', 'dirsrv@*'], text=True).splitlines()
+        for service_unit in service_units:
+            if 'service' in service_unit:
+                service_unit_name = service_unit.split()[0]
+                FREEIPA_SERVICES['Directory Service'] = service_unit_name
+                logging.info(f"Discovered Directory Service: {service_unit_name}")
+    except Exception as e:
+        logging.error(f"An error occurred while discovering Directory Services: {e}")
 
 def get_ipa_metrics():
     """Fetch various FreeIPA metrics and update Prometheus metrics."""
     try:
         users = api.Command.user_find()['result']
         ipa_users_count.set(len(users))
-        print(f"Total users: {len(users)}")
+        logging.info(f"Total users: {len(users)}")
 
         groups = api.Command.group_find()['result']
         ipa_groups_count.set(len(groups))
-        print(f"Total groups: {len(groups)}")
+        logging.info(f"Total groups: {len(groups)}")
 
         hosts = api.Command.host_find()['result']
         ipa_hosts_count.set(len(hosts))
-        print(f"Total hosts: {len(hosts)}")
-
-        replicas = api.Command.server_find()['result']
-        ipa_replica_count.set(len(replicas))
-        print(f"Total replicas: {len(replicas)}")
+        logging.info(f"Total hosts: {len(hosts)}")
 
         sudo_rules = api.Command.sudorule_find()['result']
         ipa_sudo_rules_count.set(len(sudo_rules))
-        print(f"Total sudo rules: {len(sudo_rules)}")
+        logging.info(f"Total sudo rules: {len(sudo_rules)}")
 
         hbac_rules = api.Command.hbacrule_find()['result']
         ipa_hbac_rules_count.set(len(hbac_rules))
-        print(f"Total HBAC rules: {len(hbac_rules)}")
-
-        dns_zones = api.Command.dnszone_find()['result']
-        ipa_dns_zones_count.set(len(dns_zones))
-        print(f"Total DNS zones: {len(dns_zones)}")
+        logging.info(f"Total HBAC rules: {len(hbac_rules)}")
 
         certificates = api.Command.cert_find()['result']
         ipa_certificates_count.set(len(certificates))
-        print(f"Total certificates: {len(certificates)}")
+        logging.info(f"Total certificates: {len(certificates)}")
 
         get_ldap_stats()
         get_freeipa_service_status()
@@ -397,29 +417,48 @@ def get_ipa_metrics():
         get_group_memberships()
 
     except errors.PublicError as e:
-        print(f"An error occurred: {e}")
+        logging.error(f"An error occurred: {e}")
+
+def get_hourly_metrics():
+    """Fetch hourly FreeIPA metrics and update Prometheus metrics."""
+    try:
+        replicas = api.Command.server_find()['result']
+        ipa_replica_count.set(len(replicas))
+        logging.info(f"Total replicas: {len(replicas)}")
+
+        dns_zones = api.Command.dnszone_find()['result']
+        ipa_dns_zones_count.set(len(dns_zones))
+        logging.info(f"Total DNS zones: {len(dns_zones)}")
+
+    except errors.PublicError as e:
+        logging.error(f"An error occurred: {e}")
 
 def handle_signal(signal, frame):
     """Handle termination signals (e.g., Ctrl+C)."""
-    print("\nPrometheus exporter stopped gracefully.")
+    logging.info("Prometheus exporter stopped gracefully.")
     sys.exit(0)
 
 if __name__ == '__main__':
     start_http_server(8000)
-    print("Prometheus exporter running on port 8000")
+    logging.info("Prometheus exporter running on port 8000")
     ipa_login()
+    discover_directory_services()
     signal.signal(signal.SIGINT, handle_signal)
     signal.signal(signal.SIGTERM, handle_signal)
 
     last_logconv_run = 0
+    last_hourly_run = 0
 
-    with ThreadPoolExecutor() as executor:
-        while True:
-            executor.submit(get_ipa_metrics)
+    while True:
+        get_ipa_metrics()
 
-            current_time = time.time()
-            if current_time - last_logconv_run >= LOGCONV_INTERVAL:
-                executor.submit(get_logconv_metrics)
-                last_logconv_run = current_time
+        current_time = time.time()
+        if current_time - last_logconv_run >= LOGCONV_INTERVAL:
+            get_logconv_metrics()
+            last_logconv_run = current_time
 
-            time.sleep(60)
+        if current_time - last_hourly_run >= 3600:
+            get_hourly_metrics()
+            last_hourly_run = current_time
+
+        time.sleep(60)
