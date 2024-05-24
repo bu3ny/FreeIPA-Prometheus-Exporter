@@ -108,7 +108,7 @@ Modify the following variables in the script with your FreeIPA and LDAP server d
       2. Verify Metrics Exposure: You can verify the metrics exposure by accessing http://localhost:8000 in your web browser or using curl.
 
           ~~~
-          curl http://localhost:8000
+          curl http://localhost:8000/metrics
           ~~~
 
 3. Configure Prometheus to Scrape Metrics:
@@ -116,10 +116,14 @@ Modify the following variables in the script with your FreeIPA and LDAP server d
   - Add the following job configuration to your Prometheus configuration file (prometheus.yml):
 
     ~~~
+    global:
+    scrape_interval: 15s # Adjust the scrape interval as needed
+
     scrape_configs:
-      - job_name: 'freeipa_exporter'
+    - job_name: 'freeipa_metrics'
         static_configs:
-          - targets: ['localhost:8000']              # change it to the IP on hostname on which the script is running on - if firewalld is running, allow port 8000
+        - targets: ['localhost:8000'] # Assuming your Python script is running on localhost port 8000 - change it to match the IPA Server IP
+        metrics_path: /metrics # Specify the endpoint where metrics are exposed
     ~~~
 
 
