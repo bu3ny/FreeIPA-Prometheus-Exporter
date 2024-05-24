@@ -8,13 +8,14 @@
     - FreeIPA client
     - Prometheus client library for Python
     - LDAP3 library for Python
+    - Flask
 
 # Required Python Packages
 
   - You can install the required Python packages using pip:
 
     ~~~
-    # pip install prometheus_client ldap3 requests
+    # pip install prometheus_client ldap3 requests flask ipalib
     ~~~
 
 # Script Overview
@@ -127,178 +128,167 @@ Modify the following variables in the script with your FreeIPA and LDAP server d
   - Here's a sample output of the script running:
 
     ~~~
-    Prometheus exporter running on port 8000
+    [root@idm-1 prom_exporter]# python3 freeipa_exporter-v12.py
+    2024-05-24 11:56:05,375 - INFO - Prometheus exporter running on port 8000
     Password for admin@LINUX.EXAMPLE.COM:
-    Total users: 1
-    Total groups: 6
-    Total hosts: 1
-    Total replicas: 1
-    Total sudo rules: 0
-    Total HBAC rules: 2
-    Total DNS zones: 2
-    Total certificates: 10
-    Total LDAP entries: 526
-    Total LDAP users: 3
-    Total LDAP groups: 8
+    2024-05-24 11:56:05,808 - INFO - Discovered Directory Service: dirsrv@LINUX-EXAMPLE-COM.service
+    2024-05-24 11:56:06,247 - INFO - Total users: 1
+    2024-05-24 11:56:06,877 - INFO - Total groups: 6
+    2024-05-24 11:56:07,262 - INFO - Total hosts: 1
+    2024-05-24 11:56:07,647 - INFO - Total sudo rules: 0
+    2024-05-24 11:56:08,027 - INFO - Total HBAC rules: 2
+    2024-05-24 11:56:08,436 - INFO - Total certificates: 10
+    2024-05-24 11:56:08,991 - INFO - Total LDAP entries: 526
+    2024-05-24 11:56:08,997 - INFO - Total LDAP users: 3
+    2024-05-24 11:56:09,004 - INFO - Total LDAP groups: 8
     ipa: INFO: The ipactl command was successful
-    Directory Service (dirsrv@*.service) status: RUNNING
-    krb5kdc Service (krb5kdc.service) status: RUNNING
-    kadmin Service (kadmin.service) status: RUNNING
-    named Service (named.service) status: RUNNING
-    httpd Service (httpd.service) status: RUNNING
-    ipa-custodia Service (ipa-custodia.service) status: RUNNING
-    pki-tomcatd Service (pki-tomcatd.target) status: RUNNING
-    smb Service (smb.service) status: RUNNING
-    winbind Service (winbind.service) status: RUNNING
-    ipa-otpd Service (ipa-otpd.socket) status: RUNNING
-    ipa-dnskeysyncd Service (ipa-dnskeysyncd.service) status: RUNNING
-    Certificates expiring soon: 0
-    Replication latency: 0.5
-    dirsrv@LINUX-EXAMPLE-COM.service uptime: 2498438.4528472424
-    krb5kdc.service uptime: 2498437.4945693016
-    kadmin.service uptime: 2498437.5272693634
-    named.service uptime: 2498436.56122756
-    httpd.service uptime: 2498435.5943431854
-    ipa-custodia.service uptime: 2498435.622569561
-    smb.service uptime: 2498423.668035507
-    winbind.service uptime: 2498422.6993317604
-    ipa-otpd.socket uptime: 2498422.728649378
-    ipa-dnskeysyncd.service uptime: 2498422.7603578568
-    Active users: 1
-    Locked users: 0
-    Inactive users: 0
-    Users with expiring passwords: 0
-    Group admins has 1 members
-    Group editors has 0 members
-    Group ipausers has 0 members
-    Group linux_admins has 0 members
-    Group linux_admins_external has 0 members
-    Group trust admins has 1 members
-    Running logconv.pl script...
-    logconv.pl output:
+    2024-05-24 11:56:12,456 - INFO - krb5kdc Service (krb5kdc.service) status: RUNNING
+    2024-05-24 11:56:12,457 - INFO - kadmin Service (kadmin.service) status: RUNNING
+    2024-05-24 11:56:12,457 - INFO - named Service (named.service) status: RUNNING
+    2024-05-24 11:56:12,457 - INFO - httpd Service (httpd.service) status: RUNNING
+    2024-05-24 11:56:12,457 - INFO - ipa-custodia Service (ipa-custodia.service) status: RUNNING
+    2024-05-24 11:56:12,457 - INFO - pki-tomcatd Service (pki-tomcatd@pki-tomcat.service) status: RUNNING
+    2024-05-24 11:56:12,457 - INFO - smb Service (smb.service) status: RUNNING
+    2024-05-24 11:56:12,457 - INFO - winbind Service (winbind.service) status: RUNNING
+    2024-05-24 11:56:12,457 - INFO - ipa-otpd Service (ipa-otpd.socket) status: RUNNING
+    2024-05-24 11:56:12,457 - INFO - ipa-dnskeysyncd Service (ipa-dnskeysyncd.service) status: RUNNING
+    2024-05-24 11:56:12,457 - INFO - Directory Service (dirsrv@LINUX-EXAMPLE-COM.service) status: RUNNING
+    2024-05-24 11:56:12,722 - INFO - Certificates expiring soon: 0
+    2024-05-24 11:56:12,722 - INFO - Replication latency: 0.5
+    2024-05-24 11:56:12,764 - INFO - krb5kdc.service uptime: 43497.76041722298
+    2024-05-24 11:56:12,802 - INFO - kadmin.service uptime: 43497.80181193352
+    2024-05-24 11:56:12,837 - INFO - named.service uptime: 43496.8374581337
+    2024-05-24 11:56:12,872 - INFO - httpd.service uptime: 43494.872322797775
+    2024-05-24 11:56:12,910 - INFO - ipa-custodia.service uptime: 43493.91032123566
+    2024-05-24 11:56:12,951 - INFO - pki-tomcatd@pki-tomcat.service uptime: 43479.95148611069
+    2024-05-24 11:56:12,987 - INFO - smb.service uptime: 43479.98678565025
+    2024-05-24 11:56:13,027 - INFO - winbind.service uptime: 43479.02730536461
+    2024-05-24 11:56:13,069 - INFO - ipa-otpd.socket uptime: 43479.06884098053
+    2024-05-24 11:56:13,109 - INFO - ipa-dnskeysyncd.service uptime: 43479.108805418015
+    2024-05-24 11:56:13,154 - INFO - dirsrv@LINUX-EXAMPLE-COM.service uptime: 43498.15442228317
+    2024-05-24 11:56:13,428 - INFO - Active users: 1
+    2024-05-24 11:56:13,428 - INFO - Locked users: 0
+    2024-05-24 11:56:13,428 - INFO - Inactive users: 0
+    2024-05-24 11:56:13,727 - INFO - Users with expiring passwords: 0
+    2024-05-24 11:56:14,274 - INFO - Group admins has 1 members
+    2024-05-24 11:56:14,509 - INFO - Group editors has 0 members
+    2024-05-24 11:56:15,139 - INFO - Group ipausers has 0 members
+    2024-05-24 11:56:15,507 - INFO - Group linux_admins has 0 members
+    2024-05-24 11:56:16,295 - INFO - Group linux_admins_external has 0 members
+    2024-05-24 11:56:16,655 - INFO - Group trust admins has 1 members
+    2024-05-24 11:56:16,655 - INFO - Running logconv.pl script...
+    2024-05-24 11:56:17,790 - INFO - logconv.pl output:
     Access Log Analyzer 8.2
-    Command: logconv.pl /var/log/dirsrv/slapd-LINUX-EXAMPLE-COM/access.rotationinfo /var/log/dirsrv/slapd-LINUX-EXAMPLE-COM/access.20240513-095515 /var/log/dirsrv/slapd-LINUX-EXAMPLE-COM/access.20240514-095518 /var/log/dirsrv/slapd-LINUX-EXAMPLE-COM/access.20240517-095528 /var/log/dirsrv/slapd-LINUX-EXAMPLE-COM/access.20240515-095521 /var/log/dirsrv/slapd-LINUX-EXAMPLE-COM/access /var/log/dirsrv/slapd-LINUX-EXAMPLE-COM/access.20240518-095601 /var/log/dirsrv/slapd-LINUX-EXAMPLE-COM/access.20240519-095604 /var/log/dirsrv/slapd-LINUX-EXAMPLE-COM/access.20240511-095509 /var/log/dirsrv/slapd-LINUX-EXAMPLE-COM/access.20240512-095512 /var/log/dirsrv/slapd-LINUX-EXAMPLE-COM/access.20240516-095524
-    Processing 11 Access Log(s)...
+    Command: logconv.pl /var/log/dirsrv/slapd-LINUX-EXAMPLE-COM/access /var/log/dirsrv/slapd-LINUX-EXAMPLE-COM/access.rotationinfo
+    Processing 1 Access Log(s)...
 
-    [011] /var/log/dirsrv/slapd-LINUX-EXAMPLE-COM/access.20240511-095509	size (bytes):      2317873
-
-    [010] /var/log/dirsrv/slapd-LINUX-EXAMPLE-COM/access.20240512-095512	size (bytes):      2319779
-
-    [009] /var/log/dirsrv/slapd-LINUX-EXAMPLE-COM/access.20240513-095515	size (bytes):      2502419
-
-    [008] /var/log/dirsrv/slapd-LINUX-EXAMPLE-COM/access.20240514-095518	size (bytes):      2402352
-
-    [007] /var/log/dirsrv/slapd-LINUX-EXAMPLE-COM/access.20240515-095521	size (bytes):      2714512
-
-    [006] /var/log/dirsrv/slapd-LINUX-EXAMPLE-COM/access.20240516-095524	size (bytes):      2306250
-
-    [005] /var/log/dirsrv/slapd-LINUX-EXAMPLE-COM/access.20240517-095528	size (bytes):      2403188
-
-    [004] /var/log/dirsrv/slapd-LINUX-EXAMPLE-COM/access.20240518-095601	size (bytes):      2324392
-
-    [003] /var/log/dirsrv/slapd-LINUX-EXAMPLE-COM/access.20240519-095604	size (bytes):      2579004
-
-    [002] /var/log/dirsrv/slapd-LINUX-EXAMPLE-COM/access.rotationinfo	size (bytes):         1071
-
-    [001] /var/log/dirsrv/slapd-LINUX-EXAMPLE-COM/access	size (bytes):     18927129
-        25000 Lines Processed          4983596 of     18927129 bytes (26.330%)
-        50000 Lines Processed         11665775 of     18927129 bytes (61.635%)
-        75000 Lines Processed         18624147 of     18927129 bytes (98.399%)
+    [001] /var/log/dirsrv/slapd-LINUX-EXAMPLE-COM/access	size (bytes):      8818244
+        25000 Lines Processed          6743772 of      8818244 bytes (76.475%)
 
 
-    Total Log Lines Analysed:  170062
+    Total Log Lines Analysed:  32444
 
 
     ----------- Access Log Output ------------
 
-    Start of Logs:    11/May/2024:09:54:55.230219129
-    End of Logs:      20/May/2024:22:40:05.730843167
+    Start of Logs:    23/May/2024:23:51:15.085804290
+    End of Logs:      24/May/2024:11:56:16.628592861
 
-    Processed Log Time:  9 Days, 12 Hours, 45 Minutes, 10.500622336 Seconds
+    Processed Log Time:  12 Hours, 5 Minutes, 1.542793216 Seconds
 
-    Restarts:                      0
+    Restarts:                      1
     Secure Protocol Versions:
-      - TLS1.3 128-bit AES-GCM (297 connections)
+      - TLS1.3 client bound as uid=pkidbuser,ou=People,o=ipaca (11 connections)
+      - TLS1.3 128-bit AES-GCM; client CN=CA Subsystem,O=LINUX.EXAMPLE.COM; issuer CN=Certificate Authority,O=LINUX.EXAMPLE.COM (11 connections)
+      - TLS1.3 128-bit AES-GCM (73 connections)
+      - TLS1.2 128-bit AES-GCM (1 connections)
 
-    Peak Concurrent Connections:   4
-    Total Operations:              77823
-    Total Results:                 75095
-    Overall Performance:           96.5%
+    Peak Concurrent Connections:   29
+    Total Operations:              14728
+    Total Results:                 14488
+    Overall Performance:           98.4%
 
-    Total Connections:             4353          (0.01/sec)  (0.32/min)
-    - LDAP Connections:           3864          (0.00/sec)  (0.28/min)
-    - LDAPI Connections:          332           (0.00/sec)  (0.02/min)
-    - LDAPS Connections:          157           (0.00/sec)  (0.01/min)
-    - StartTLS Extended Ops:      140           (0.00/sec)  (0.01/min)
+    Total Connections:             942           (0.02/sec)  (1.30/min)
+    - LDAP Connections:           789           (0.02/sec)  (1.09/min)
+    - LDAPI Connections:          106           (0.00/sec)  (0.15/min)
+    - LDAPS Connections:          47            (0.00/sec)  (0.06/min)
+    - StartTLS Extended Ops:      38            (0.00/sec)  (0.05/min)
 
-    Searches:                      67547         (0.08/sec)  (4.92/min)
-    Modifications:                 979           (0.00/sec)  (0.07/min)
+    Searches:                      13283         (0.31/sec)  (18.32/min)
+    Modifications:                 52            (0.00/sec)  (0.07/min)
     Adds:                          0             (0.00/sec)  (0.00/min)
     Deletes:                       0             (0.00/sec)  (0.00/min)
     Mod RDNs:                      0             (0.00/sec)  (0.00/min)
     Compares:                      0             (0.00/sec)  (0.00/min)
-    Binds:                         4338          (0.01/sec)  (0.32/min)
+    Binds:                         944           (0.02/sec)  (1.30/min)
 
-    Average wtime (wait time):     0.000528216
-    Average optime (op time):      0.001284505
-    Average etime (elapsed time):  0.001809618
+    Average wtime (wait time):     0.000632765
+    Average optime (op time):      0.001312601
+    Average etime (elapsed time):  0.001942145
 
     Proxied Auth Operations:       0
-    Persistent Searches:           0
+    Persistent Searches:           5
     Internal Operations:           0
     Entry Operations:              0
-    Extended Operations:           280
+    Extended Operations:           76
     Abandoned Requests:            0
     Smart Referrals Received:      0
 
-    VLV Operations:                4679
+    VLV Operations:                373
     VLV Unindexed Searches:        0
-    VLV Unindexed Components:      2738
-    SORT Operations:               1941
+    VLV Unindexed Components:      144
+    SORT Operations:               229
 
-    Entire Search Base Queries:    305
-    Paged Searches:                5360
+    Entire Search Base Queries:    60
+    Paged Searches:                694
     Unindexed Searches:            0
-    Unindexed Components:          172
+    Unindexed Components:          35
     Invalid Attribute Filters:     0
-    FDs Taken:                     4353
-    FDs Returned:                  4352
-    Highest FD Taken:              242
+    FDs Taken:                     942
+    FDs Returned:                  927
+    Highest FD Taken:              255
 
     Broken Pipes:                  0
     Connections Reset By Peer:     0
     Resource Unavailable:          0
     Max BER Size Exceeded:         0
 
-    Binds:                         4338
-    Unbinds:                       4043
-    -----------------------------------
+    Binds:                         944
+    Unbinds:                       842
+    ----------------------------------
     - LDAP v2 Binds:              0
-    - LDAP v3 Binds:              4177
-    - AUTOBINDs(LDAPI):           161
+    - LDAP v3 Binds:              892
+    - AUTOBINDs(LDAPI):           52
     - SSL Client Binds:           0
     - Failed SSL Client Binds:    0
-    - SASL Binds:                 4018
-      - GSS-SPNEGO: 2801
-      - GSSAPI: 1056
-      - EXTERNAL: 161
-    - Directory Manager Binds:    4
+    - SASL Binds:                 859
+      - GSS-SPNEGO: 701
+      - GSSAPI: 95
+      - EXTERNAL: 63
+    - Directory Manager Binds:    0
     - Anonymous Binds:            0
 
     Cleaning up temp files...
     Done.
 
-    logconv.pl metrics updated
+    2024-05-24 11:56:17,791 - INFO - logconv.pl metrics updated
+    2024-05-24 11:56:18,178 - INFO - Total replicas: 1
+    2024-05-24 11:56:18,571 - INFO - Total DNS zones: 2
     ~~~
+
+
 
   - Here's a sample output of the curl command:
 
+
+
     ~~~
+    [root@idm-1 prom_exporter]# curl localhost:8000/metrics
     # HELP python_gc_objects_collected_total Objects collected during gc
     # TYPE python_gc_objects_collected_total counter
-    python_gc_objects_collected_total{generation="0"} 1850.0
-    python_gc_objects_collected_total{generation="1"} 379.0
-    python_gc_objects_collected_total{generation="2"} 0.0
+    python_gc_objects_collected_total{generation="0"} 2464.0
+    python_gc_objects_collected_total{generation="1"} 87.0
+    python_gc_objects_collected_total{generation="2"} 6.0
     # HELP python_gc_objects_uncollectable_total Uncollectable objects found during GC
     # TYPE python_gc_objects_uncollectable_total counter
     python_gc_objects_uncollectable_total{generation="0"} 0.0
@@ -306,27 +296,27 @@ Modify the following variables in the script with your FreeIPA and LDAP server d
     python_gc_objects_uncollectable_total{generation="2"} 0.0
     # HELP python_gc_collections_total Number of times this generation was collected
     # TYPE python_gc_collections_total counter
-    python_gc_collections_total{generation="0"} 261.0
-    python_gc_collections_total{generation="1"} 23.0
+    python_gc_collections_total{generation="0"} 323.0
+    python_gc_collections_total{generation="1"} 29.0
     python_gc_collections_total{generation="2"} 2.0
     # HELP python_info Python platform information
     # TYPE python_info gauge
     python_info{implementation="CPython",major="3",minor="9",patchlevel="18",version="3.9.18"} 1.0
     # HELP process_virtual_memory_bytes Virtual memory size in bytes.
     # TYPE process_virtual_memory_bytes gauge
-    process_virtual_memory_bytes 2.36843008e+08
+    process_virtual_memory_bytes 2.50507264e+08
     # HELP process_resident_memory_bytes Resident memory size in bytes.
     # TYPE process_resident_memory_bytes gauge
-    process_resident_memory_bytes 8.030208e+07
+    process_resident_memory_bytes 9.4134272e+07
     # HELP process_start_time_seconds Start time of the process since unix epoch in seconds.
     # TYPE process_start_time_seconds gauge
-    process_start_time_seconds 1.71622704283e+09
+    process_start_time_seconds 1.71653719792e+09
     # HELP process_cpu_seconds_total Total user and system CPU time spent in seconds.
     # TYPE process_cpu_seconds_total counter
-    process_cpu_seconds_total 1.79
+    process_cpu_seconds_total 1.77
     # HELP process_open_fds Number of open file descriptors.
     # TYPE process_open_fds gauge
-    process_open_fds 9.0
+    process_open_fds 8.0
     # HELP process_max_fds Maximum number of open file descriptors.
     # TYPE process_max_fds gauge
     process_max_fds 1024.0
@@ -362,18 +352,30 @@ Modify the following variables in the script with your FreeIPA and LDAP server d
     freeipa_replication_latency 0.5
     # HELP freeipa_service_uptime Uptime of FreeIPA services
     # TYPE freeipa_service_uptime gauge
-    freeipa_service_uptime{service="dirsrv@*.service"} 1.0
-    freeipa_service_uptime{service="krb5kdc.service"} 2.4950858754734993e+06
-    freeipa_service_uptime{service="kadmin.service"} 2.4950859129490852e+06
-    freeipa_service_uptime{service="named.service"} 2.4950849516251087e+06
-    freeipa_service_uptime{service="httpd.service"} 2.4950839903361797e+06
-    freeipa_service_uptime{service="ipa-custodia.service"} 2.4950840363357067e+06
-    freeipa_service_uptime{service="pki-tomcatd.target"} 1.0
-    freeipa_service_uptime{service="smb.service"} 2.4950720917503834e+06
-    freeipa_service_uptime{service="winbind.service"} 2.4950711296663284e+06
-    freeipa_service_uptime{service="ipa-otpd.socket"} 2.4950711736752987e+06
-    freeipa_service_uptime{service="ipa-dnskeysyncd.service"} 2.495071217415571e+06
-    freeipa_service_uptime{service="dirsrv@LINUX-EXAMPLE-COM.service"} 2.495086838447809e+06
+    freeipa_service_uptime{service="krb5kdc.service"} 43330.866621255875
+    freeipa_service_uptime{service="kadmin.service"} 43330.90213441849
+    freeipa_service_uptime{service="named.service"} 43329.93708014488
+    freeipa_service_uptime{service="httpd.service"} 43327.97226405144
+    freeipa_service_uptime{service="ipa-custodia.service"} 43327.00596547127
+    freeipa_service_uptime{service="pki-tomcatd@pki-tomcat.service"} 43313.04147672653
+    freeipa_service_uptime{service="smb.service"} 43313.07425546646
+    freeipa_service_uptime{service="winbind.service"} 43312.10667347908
+    freeipa_service_uptime{service="ipa-otpd.socket"} 43312.14158701897
+    freeipa_service_uptime{service="ipa-dnskeysyncd.service"} 43312.18088722229
+    freeipa_service_uptime{service="dirsrv@LINUX-EXAMPLE-COM.service"} 43331.2125582695
+    # HELP freeipa_service_status Status of FreeIPA services (1 = running, 0 = not running)
+    # TYPE freeipa_service_status gauge
+    freeipa_service_status{service="krb5kdc.service"} 1.0
+    freeipa_service_status{service="kadmin.service"} 1.0
+    freeipa_service_status{service="named.service"} 1.0
+    freeipa_service_status{service="httpd.service"} 1.0
+    freeipa_service_status{service="ipa-custodia.service"} 1.0
+    freeipa_service_status{service="pki-tomcatd@pki-tomcat.service"} 1.0
+    freeipa_service_status{service="smb.service"} 1.0
+    freeipa_service_status{service="winbind.service"} 1.0
+    freeipa_service_status{service="ipa-otpd.socket"} 1.0
+    freeipa_service_status{service="ipa-dnskeysyncd.service"} 1.0
+    freeipa_service_status{service="dirsrv@LINUX-EXAMPLE-COM.service"} 1.0
     # HELP freeipa_active_user_accounts Number of active user accounts
     # TYPE freeipa_active_user_accounts gauge
     freeipa_active_user_accounts 1.0
@@ -411,19 +413,19 @@ Modify the following variables in the script with your FreeIPA and LDAP server d
     ldap_current_connections 15.0
     # HELP ldap_total_connections Total number of LDAP connections
     # TYPE ldap_total_connections gauge
-    ldap_total_connections 6128.0
+    ldap_total_connections 906.0
     # HELP ldap_ops_initiated Number of LDAP operations initiated
     # TYPE ldap_ops_initiated gauge
-    ldap_ops_initiated 232733.0
+    ldap_ops_initiated 15705.0
     # HELP ldap_ops_completed Number of LDAP operations completed
     # TYPE ldap_ops_completed gauge
-    ldap_ops_completed 232732.0
+    ldap_ops_completed 15704.0
     # HELP ldap_entries_sent Number of LDAP entries sent
     # TYPE ldap_entries_sent gauge
-    ldap_entries_sent 206990.0
+    ldap_entries_sent 27765.0
     # HELP ldap_bytes_sent Number of LDAP bytes sent
     # TYPE ldap_bytes_sent gauge
-    ldap_bytes_sent 3.07277406e+08
+    ldap_bytes_sent 5.3235908e+07
     # HELP ldap_anonymous_binds Number of anonymous LDAP binds
     # TYPE ldap_anonymous_binds gauge
     ldap_anonymous_binds 0.0
@@ -432,43 +434,43 @@ Modify the following variables in the script with your FreeIPA and LDAP server d
     ldap_unauth_binds 0.0
     # HELP ldap_simple_auth_binds Number of simple authenticated LDAP binds
     # TYPE ldap_simple_auth_binds gauge
-    ldap_simple_auth_binds 153.0
+    ldap_simple_auth_binds 32.0
     # HELP ldap_search_ops Number of LDAP search operations
     # TYPE ldap_search_ops gauge
-    ldap_search_ops 174134.0
+    ldap_search_ops 12793.0
     # HELP logconv_peak_concurrent_connections Peak Concurrent Connections
     # TYPE logconv_peak_concurrent_connections gauge
-    logconv_peak_concurrent_connections 4.0
+    logconv_peak_concurrent_connections 29.0
     # HELP logconv_total_operations Total Operations
     # TYPE logconv_total_operations gauge
-    logconv_total_operations 75762.0
+    logconv_total_operations 14071.0
     # HELP logconv_total_results Total Results
     # TYPE logconv_total_results gauge
-    logconv_total_results 73064.0
+    logconv_total_results 13835.0
     # HELP logconv_overall_performance Overall Performance
     # TYPE logconv_overall_performance gauge
-    logconv_overall_performance 96.4
+    logconv_overall_performance 98.3
     # HELP logconv_total_connections Total Connections
     # TYPE logconv_total_connections gauge
-    logconv_total_connections 4206.0
+    logconv_total_connections 899.0
     # HELP logconv_ldap_connections Number of LDAP Connections
     # TYPE logconv_ldap_connections gauge
-    logconv_ldap_connections 3735.0
+    logconv_ldap_connections 752.0
     # HELP logconv_ldapi_connections Number of LDAPI Connections
     # TYPE logconv_ldapi_connections gauge
-    logconv_ldapi_connections 320.0
+    logconv_ldapi_connections 102.0
     # HELP logconv_ldaps_connections Number of LDAPS Connections
     # TYPE logconv_ldaps_connections gauge
-    logconv_ldaps_connections 151.0
+    logconv_ldaps_connections 45.0
     # HELP logconv_starttls_extended_ops Number of StartTLS Extended Ops
     # TYPE logconv_starttls_extended_ops gauge
-    logconv_starttls_extended_ops 133.0
+    logconv_starttls_extended_ops 36.0
     # HELP logconv_searches Number of Searches
     # TYPE logconv_searches gauge
     logconv_searches 0.0
     # HELP logconv_modifications Number of Modifications
     # TYPE logconv_modifications gauge
-    logconv_modifications 975.0
+    logconv_modifications 52.0
     # HELP logconv_adds Number of Adds
     # TYPE logconv_adds gauge
     logconv_adds 0.0
@@ -486,14 +488,15 @@ Modify the following variables in the script with your FreeIPA and LDAP server d
     logconv_binds 0.0
     # HELP logconv_avg_wtime Average wait time
     # TYPE logconv_avg_wtime gauge
-    logconv_avg_wtime 0.000529113
+    logconv_avg_wtime 0.000637914
     # HELP logconv_avg_optime Average operation time
     # TYPE logconv_avg_optime gauge
-    logconv_avg_optime 0.001279598
+    logconv_avg_optime 0.001315688
     # HELP logconv_avg_etime Average elapsed time
     # TYPE logconv_avg_etime gauge
-    logconv_avg_etime 0.001805612
+    logconv_avg_etime 0.001950432
     ~~~
+
 
 # Troubleshooting
 
@@ -507,6 +510,7 @@ Modify the following variables in the script with your FreeIPA and LDAP server d
     2. ldap3
     3. requests
     4. ipalib
+    5. flask
 
 - You can install these packages using pip. Here is the command to install all the required packages:
 
